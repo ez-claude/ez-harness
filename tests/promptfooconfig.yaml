@@ -1,0 +1,219 @@
+description: "Claude Harness - 역추적 규칙 효과 측정 (하네스 ON vs OFF)"
+
+# Claude API 설정
+providers:
+  - id: anthropic:claude-haiku-4-5-20251001
+    label: "Claude Haiku (테스트용)"
+
+# 두 프롬프트 변형 비교
+prompts:
+  - id: baseline
+    label: "하네스 OFF (기본)"
+    file: prompts/baseline.txt
+  - id: harness
+    label: "하네스 ON (역추적 규칙)"
+    file: prompts/harness.txt
+
+# 테스트 케이스 (실제 버그 10개)
+tests:
+  # 1. 파일 확장자 하드코딩
+  - description: "[TC01] 파일 확장자 하드코딩 - M4A 업로드 시 SRT 생성 실패"
+    vars:
+      code: |
+        # stt.py
+        def process_audio(audio_path):
+            result = transcribe(audio_path)
+            srt_path = audio_path.replace('.mp3', '.srt')
+            write_srt(result, srt_path)
+            return srt_path
+      error: "FileNotFoundError: /uploads/voice.m4a.srt 파일 생성 실패"
+    assert:
+      - type: llm-rubric
+        value: "응답이 .mp3 하드코딩이 근본 원인임을 명확히 지적하고, os.path.splitext() 같은 확장자 무관 방식으로 수정했는가?"
+        provider: anthropic:claude-haiku-4-5-20251001
+      - type: llm-rubric
+        value: "증상(SRT 생성 실패)만 고친 게 아니라, 왜 M4A에서 실패하는지 원인을 설명했는가?"
+        provider: anthropic:claude-haiku-4-5-20251001
+
+  # 2. Windows 인코딩 충돌
+  - description: "[TC02] Windows cp949 vs UTF-8 충돌 (10회 반복 버그)"
+    vars:
+      code: |
+        # runner.py
+        result = subprocess.run(
+            ['python', 'process.py'],
+            capture_output=True,
+            encoding='utf-8'
+        )
+        print(result.stdout)
+      error: "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xbf in position 3"
+    assert:
+      - type: llm-rubric
+        value: "Windows 기본 인코딩(cp949)과 UTF-8 강제 사이의 충돌이 근본 원인임을 식별했는가?"
+        provider: anthropic:claude-haiku-4-5-20251001
+      - type: llm-rubric
+        value: "encoding='utf-8' 제거만 하는 증상 패치가 아니라, PYTHONIOENCODING 환경변수나 errors=replace 같은 근본 해결책을 제시했는가?"
+        provider: anthropic:claude-haiku-4-5-20251001
+
+  # 3. 부분 수정으로 기존 기능 손실
+  - description: "[TC03] 부분 Edit으로 기존 기능 사라짐"
+    vars:
+      code: |
+        # api.py (수정 후)
+        @app.route('/upload', methods=['POST'])
+        def upload():
+            file = request.files['file']
+            return save_file(file)
+
+        # 원래 있던 기능들이 사라짐:
+        # @app.route('/list') - 파일 목록
+        # @app.route('/delete') - 파일 삭제
+      error: "404 Not Found: /list, /delete 엔드포인트가 없어졌어요"
+    assert:
+      - type: llm-rubric
+        value: "파일 전체를 Read하지 않고 부분만 수정한 것이 근본 원인임을 지적했는가?"
+        provider: anthropic:claude-haiku-4-5-20251001
+
+  # 4. 표준 라이브러리 try 블록 안에 import
+  - description: "[TC04] 표준 라이브러리 import를 try 블록 안에 넣음"
+    vars:
+      code: |
+        # processor.py
+        def process_text(text):
+            try:
+                import re
+                import json
+                result = re.findall(r'\d+', text)
+                return json.dumps(result)
+            except Exception as e:
+                return []
+      error: "NameError: name 're' is not defined (다른 함수에서 re 사용 시)"
+    assert:
+      - type: llm-rubric
+        value: "try 블록 안의 import는 해당 블록 스코프에만 적용된다는 근본 원인을 설명했는가?"
+        provider: anthropic:claude-haiku-4-5-20251001
+
+  # 5. import 누락
+  - description: "[TC05] 환경변수 코드 추가했지만 import os 누락"
+    vars:
+      code: |
+        # gui.py
+        def run_process():
+            env = os.environ.copy()  # 방금 추가한 코드
+            env['PYTHONIOENCODING'] = 'utf-8'
+            result = subprocess.run(['python', 'run.py'], env=env)
+            return result
+      error: "NameError: name 'os' is not defined"
+    assert:
+      - type: llm-rubric
+        value: "import os 추가만으로 해결 가능한 단순 케이스이지만, 왜 이런 실수가 발생했는지(파일 상단 import 없이 코드 추가) 원인을 언급했는가?"
+        provider: anthropic:claude-haiku-4-5-20251001
+
+  # 6. JSON 배열 append 시 덮어쓰기
+  - description: "[TC06] JSON 배열에 항목 추가 시 기존 데이터 사라짐"
+    vars:
+      code: |
+        # data.json (수정 전)
+        {
+          "items": [
+            {"id": 1, "name": "기존 항목 A"},
+            {"id": 2, "name": "기존 항목 B"}
+          ]
+        }
+
+        # 수정 후 (문제 발생)
+        {
+          "items": [
+            {"id": 3, "name": "새 항목 C"}
+          ]
+        }
+      error: "기존 항목 A, B가 사라지고 새 항목 C만 남음"
+    assert:
+      - type: llm-rubric
+        value: "배열 시작부를 old_string으로 포함해서 전체를 교체한 것이 근본 원인임을 식별했는가?"
+        provider: anthropic:claude-haiku-4-5-20251001
+
+  # 7. TypeScript 타입 일부 위치 누락
+  - description: "[TC07] TypeScript 타입값 변경 시 일부 위치 누락"
+    vars:
+      code: |
+        // types.ts - 변경됨
+        type Status = 'active' | 'inactive' | 'pending'  // 'pending' 추가
+
+        // service.ts - 아직 구버전
+        function updateStatus(status: 'active' | 'inactive') {
+            // ...
+        }
+
+        // api.ts - 아직 구버전
+        const validStatuses = ['active', 'inactive']
+      error: "TypeScript 빌드 오류: Type 'pending' is not assignable to type 'active' | 'inactive'"
+    assert:
+      - type: llm-rubric
+        value: "types.ts만 수정하고 다른 파일들을 동기화하지 않은 것이 근본 원인임을 식별하고, grep으로 전체 사용처를 확인해야 한다고 제안했는가?"
+        provider: anthropic:claude-haiku-4-5-20251001
+
+  # 8. 배치 선택 로직 항상 동일한 결과
+  - description: "[TC08] 배치 분석 시 항상 동일한 50개 항목 선택"
+    vars:
+      code: |
+        # batch.py
+        def get_unprocessed_items(sheet):
+            all_items = sheet.get_all_records()
+            # 분석 완료 여부 체크
+            unprocessed = [
+                item for item in all_items
+                if item.get('phase1_score') is None  # 버그: 이 컬럼이 없음
+            ]
+            return unprocessed[:50]
+      error: "매번 실행해도 동일한 50개 항목이 선택됨. 이전에 분석한 항목도 계속 재선택됨."
+    assert:
+      - type: llm-rubric
+        value: "원본 시트에 phase1_score 컬럼이 없어서 완료 여부를 체크할 수 없다는 근본 원인을 식별했는가? 다른 시트(분석 결과 시트)의 ID 목록을 기준으로 완료 여부를 확인해야 한다고 제안했는가?"
+        provider: anthropic:claude-haiku-4-5-20251001
+
+  # 9. API 키 하드코딩
+  - description: "[TC09] Python 파일에 API 키 하드코딩"
+    vars:
+      code: |
+        # config.py
+        GEMINI_API_KEY = "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+        OPENAI_API_KEY = "sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+
+        def get_client():
+            return GeminiClient(api_key=GEMINI_API_KEY)
+      error: "GitGuardian 경고: Secret detected in commit abc123f - config.py"
+    assert:
+      - type: llm-rubric
+        value: "하드코딩 자체가 근본 원인이며, 환경변수(os.getenv)로 교체하고 이미 노출된 키는 즉시 폐기해야 한다고 제안했는가?"
+        provider: anthropic:claude-haiku-4-5-20251001
+
+  # 10. GUI subprocess 실시간 출력 안됨
+  - description: "[TC10] GUI에서 subprocess 실시간 출력 안됨 (버퍼링)"
+    vars:
+      code: |
+        # gui.py
+        def run_with_output(self):
+            process = subprocess.Popen(
+                ['python', 'long_task.py'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            while True:
+                line = process.stdout.readline()
+                if not line:
+                    break
+                self.log_widget.append(line.decode())
+      error: "long_task.py가 실행되는 동안 GUI 로그창에 아무것도 안 나오다가, 완료 후 한꺼번에 출력됨"
+    assert:
+      - type: llm-rubric
+        value: "stdout을 PIPE로 연결하면 block buffering 모드로 전환된다는 근본 원인을 설명했는가? PYTHONUNBUFFERED=1 환경변수나 flush=True 사용을 제안했는가?"
+        provider: anthropic:claude-haiku-4-5-20251001
+
+# 하네스 ON 전용 추가 체크: 역추적 형식 포함 여부
+defaultTest:
+  options:
+    provider: anthropic:claude-haiku-4-5-20251001
+
+# 결과 출력
+outputPath: results/latest.json
