@@ -62,6 +62,12 @@ Read: state/routing.json → 라우팅 규칙 로드
 
 [5] Check
     pre-commit / CI / E2E
+
+[6] 루프 (Check 실패 또는 sim FAIL 시)
+    실패 감지 → 역추적 재실행 (근본 원인 재확인)
+    → 수정 → sim → Check (최대 3회)
+    → 3회 후에도 실패: 사용자에게 보고 + 승인 대기
+    출력: "[루프 N/3] {실패 원인} → 재역추적"
 ```
 
 ---
