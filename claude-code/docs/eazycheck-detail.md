@@ -109,35 +109,6 @@ Proceeding to risk assessment.
 
 ---
 
-## GATE -1: Pre-Plan Gate
-
-> Verify when transitioning from Plan Mode to Build Mode
-
-### Checklist
-- [ ] Competitor/existing approach analysis present?
-- [ ] Root cause clear?
-- [ ] Quality criteria in specific numbers?
-- [ ] Domain-specific rules included?
-- [ ] Verification method concrete?
-
-### Output
-
-```
-[GATE -1 Check]
-[ ] Competitor analysis: [OK/MISSING]
-[ ] Root cause: [OK/MISSING]
-[ ] Quality criteria: [OK/MISSING]
-[ ] Domain rules: [OK/MISSING]
-[ ] Verification method: [OK/MISSING]
-
-Result: {N}/5 passed
--> Under 3: Plan needs improvement
--> 3 or more: Build transition possible (warnings for missed items)
--> All 5: [GATE -1 passed]
-```
-
----
-
 ## Research (MID+ risk, before DMAD)
 
 > After GATE, before DMAD. Conditional skip allowed.
@@ -344,33 +315,6 @@ Output: "[Loop N/3] {failure type} -> {restart point}"
 
 ---
 
-## Check: Tool-based Verification (after code)
-
-> Pure tools only. No scenario judgment.
-
-### Check 1: Pre-commit Hooks
-- Ruff: Python linter/formatter
-- check-ast: AST verification
-- Custom Rules: patterns.json-based hardcoding detection
-
-### Check 2: GitHub Actions
-- Claude Code Action - AI code review
-- Impact analysis
-- Security scan (Bandit)
-
-### Check 3: E2E Tests
-- API contract verification + internal implementation hardcoding detection
-
-### 3-layer defense
-
-| Layer | Component | Timing | Bypassable |
-|-------|-----------|--------|------------|
-| Layer 1 | Check 1 (pre-commit) | git commit | Yes (--no-verify) |
-| Layer 2 | Check 2 (GitHub Actions) | PR creation | No (CI enforced) |
-| Layer 3 | Check 3 (E2E) | PR creation | No (CI enforced) |
-
----
-
 ## Pattern System
 
 > Details: rules/pattern-system.md
@@ -393,4 +337,4 @@ frequency 3+ -> auto-escalate severity.
 | `state/patterns.json` | Pattern DB |
 | `state/routing.json` | Debate patterns + routing |
 | `skills/sim/SKILL.md` | /sim scenario skill |
-| `rules/pattern-system.md` | Pattern accumulation system |
+| `docs/pattern-system.md` | Pattern accumulation system |

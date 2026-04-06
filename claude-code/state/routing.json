@@ -1,7 +1,7 @@
 {
   "departments": {
     "verification": {
-      "agents": ["eazycheck-gate", "code-reviewer", "pattern-debugger"],
+      "agents": ["eazycheck-gate", "code-reviewer"],
       "trigger": "verify|review|security|debug|pattern|GATE|EazyCheck",
       "description": "Code quality, security, and pattern verification"
     },
@@ -22,7 +22,7 @@
       "Risk 2-3 (MID) -> Research + DMAD 1 round + impl spec + sim 1x",
       "Risk 4+ (HIGH) -> Research + DMAD 2 rounds + impl spec + sim loop 2x",
       "After code -> verification dept (code-reviewer) auto-run",
-      "Repeated errors -> verification dept (pattern-debugger) auto-run"
+      "Repeated errors -> verification dept (code-reviewer) auto-run"
     ],
     "discussionPattern": {
       "method": "DMAD (Diverse Multi-Agent Debate) - Q&A between two roles with different reasoning directions",

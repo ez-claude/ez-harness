@@ -39,7 +39,6 @@ def find_buffer_path():
 
     # Claude Code encodes project paths as folder names with dashes replacing separators
     # e.g. /home/user/my-project -> home-user-my-project
-    # or C:\Users\user\Desktop\gpt -> c--Users-user-Desktop-gpt
     best_match = None
     best_length = 0
 
